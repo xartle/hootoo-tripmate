@@ -30,14 +30,11 @@ HTML
   echo "  note: jquery is on a CDN above -- vendor it for fully-offline play."
 }
 
-# ---- FreeCell: lightweight static JS implementation ----
+# ---- FreeCell: BUNDLED (our own single-file static game, tracked in repo) ----
 fetch_freecell(){
   echo "== freecell =="
-  mkdir -p freecell
-  # pick a small static implementation; example placeholder clone:
-  git clone --depth 1 https://github.com/shlomif/fc-solve freecell/fc-solve \
-    && echo "  (fc-solve is the SOLVER; add a static JS FreeCell UI as index.html)"
-  echo "  TODO: drop a single-file JS FreeCell index.html here (<1 MB)."
+  echo "  bundled: freecell/index.html is committed in this repo (self-contained,"
+  echo "  no deps). Nothing to fetch -- just copy freecell/ to the stick as-is."
 }
 
 # ---- Brogue CE: needs a maintained WASM web build (manual) ----

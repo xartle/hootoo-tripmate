@@ -40,7 +40,7 @@ then copy the populated `games/` tree onto the stick. Don't commit the payloads
 | OpenTTD         | github.com/OpenTTD/OpenTTD (use an Emscripten/WASM web build) | 30-80 MB | needs base graphics (OpenGFX) |
 | Freeciv Web     | github.com/freeciv/freeciv-web | 50-150 MB | complex to self-host; Micropolis is the static alternative |
 | Chess           | chessboardjs (github.com/oakmac/chessboardjs) + stockfish.js (github.com/nmrugg/stockfish.js) | <5 MB | fetch-games.sh assembles the glue index.html |
-| FreeCell        | a lightweight JS implementation (e.g. github.com/... ) ; engine: github.com/gramps/fc-solve | <1 MB | pure static |
+| FreeCell        | **bundled** -- `freecell/index.html` in this repo | ~10 KB | our own single-file static game; just copy to the stick |
 
 ## Hosting caveats
 - **Threaded WASM** (SharedArrayBuffer) needs `Cross-Origin-Opener-Policy` +

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+<title>FreeCell</title>
+<style>
+  :root{--green:#1f7a44;--green2:#176235;--felt:#0b5d2e;--gold:#ffd479}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:radial-gradient(circle at 50% 0,var(--green),var(--green2));
+       color:#fff;font:15px/1.3 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;min-height:100vh}
+  header{display:flex;align-items:center;gap:14px;padding:10px 14px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;font-weight:800}
+  header .sp{flex:1}
+  button{background:#0e4d27;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;
+          padding:7px 12px;font:inherit;cursor:pointer}
+  button:hover{border-color:var(--gold)}
+  #msg{color:var(--gold);font-weight:700;min-height:20px;padding:0 14px}
+  .board{padding:8px 14px 40px;max-width:980px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .cells,.founds{display:flex;gap:8px}
+  .slot{width:64px;height:90px;border-radius:7px;border:2px dashed rgba(255,255,255,.3);
+        position:relative;flex:0 0 auto}
+  .founds .slot{border-color:rgba(255,212,121,.5)}
+  .cols{display:flex;gap:8px;justify-content:center}
+  .col{width:64px;min-height:90px;position:relative;flex:0 0 auto}
+  .card{position:absolute;width:64px;height:90px;border-radius:7px;background:#fff;color:#111;
+        border:1px solid #999;box-shadow:0 1px 2px rgba(0,0,0,.4);cursor:pointer;
+        padding:4px 6px;font-weight:700;user-select:none}
+  .slot .card{position:absolute;top:0;left:0}
+  .card.red{color:#c1121f}
+  .card .big{position:absolute;bottom:4px;right:6px;font-size:22px}
+  .card.sel{outline:3px solid var(--gold);outline-offset:-1px;z-index:5}
+  .col .ph{position:absolute;inset:0;border-radius:7px;border:2px dashed rgba(255,255,255,.18)}
+  @media(max-width:560px){.slot,.col,.card{width:42px}.slot,.card{height:62px}.card .big{font-size:15px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>FreeCell</h1>
+  <button onclick="game.deal()">New game</button>
+  <button onclick="game.autoFoundations()">Auto &#9650;</button>
+  <button onclick="game.undo()">Undo</button>
+  <span class="sp"></span>
+  <span id="moves"></span>
+</header>
+<div id="msg"></div>
+<div class="board">
+  <div class="top">
+    <div class="cells" id="cells"></div>
+    <div class="founds" id="founds"></div>
+  </div>
+  <div class="cols" id="cols"></div>
+</div>
+<script>
+(function(){
+  var SUIT = ["&#9824;","&#9829;","&#9830;","&#9827;"]; // spade heart diamond club
+  var RANK = ["","A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  var isRed = function(s){ return s===1 || s===2; };
+  var cells=document.getElementById('cells'), founds=document.getElementById('founds'),
+      cols=document.getElementById('cols'), msg=document.getElementById('msg'),
+      movesEl=document.getElementById('moves');
+
+  var state, sel=null, history=[], moves=0;
+
+  function deal(){
+    var deck=[]; for(var s=0;s<4;s++) for(var r=1;r<=13;r++) deck.push({r:r,s:s});
+    for(var i=deck.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=deck[i];deck[i]=deck[j];deck[j]=t; }
+    state={ free:[null,null,null,null], found:[0,0,0,0], cols:[[],[],[],[],[],[],[],[]] };
+    for(var k=0;k<deck.length;k++) state.cols[k%8].push(deck[k]);
+    sel=null; history=[]; moves=0; msg.textContent=""; render();
+  }
+  function snapshot(){ history.push(JSON.stringify(state)); if(history.length>200) history.shift(); }
+  function undo(){ if(!history.length) return; state=JSON.parse(history.pop()); sel=null; moves++; render(); }
+
+  function freeCount(){ return state.free.filter(function(x){return !x;}).length; }
+  function emptyCols(){ return state.cols.filter(function(c){return c.length===0;}).length; }
+  // is the tail of column starting at index i a valid alt-color descending run?
+  function runOk(col,i){
+    for(var k=i;k<col.length-1;k++){
+      var a=col[k], b=col[k+1];
+      if(!(isRed(a.s)!==isRed(b.s) && a.r===b.r+1)) return false;
+    }
+    return true;
+  }
+  function maxMove(toEmpty){
+    var cap=(1+freeCount())*Math.pow(2,emptyCols());
+    if(toEmpty) cap=(1+freeCount())*Math.pow(2,Math.max(0,emptyCols()-1));
+    return cap;
+  }
+
+  function select(type,idx,start){
+    // start = index within column for col runs
+    if(type==='col'){
+      var col=state.cols[idx];
+      if(!col.length) return;
+      if(start===undefined) start=col.length-1;
+      if(!runOk(col,start)) start=col.length-1; // only allow valid runs; fall back to single
+      sel={type:'col',idx:idx,start:start};
+    } else if(type==='free'){
+      if(!state.free[idx]) return;
+      sel={type:'free',idx:idx};
+    }
+    render();
+  }
+
+  function movingCards(){
+    if(!sel) return [];
+    if(sel.type==='free') return [state.free[sel.idx]];
+    return state.cols[sel.idx].slice(sel.start);
+  }
+  function clearSource(){
+    if(sel.type==='free') state.free[sel.idx]=null;
+    else state.cols[sel.idx].length=sel.start;
+  }
+
+  function tryToFoundation(card){
+    if(card.r===state.found[card.s]+1) return true; return false;
+  }
+  function canStackCol(cardBottom, col){
+    if(!col.length) return true;
+    var top=col[col.length-1];
+    return isRed(top.s)!==isRed(cardBottom.s) && top.r===cardBottom.r+1;
+  }
+
+  function attempt(targetType,targetIdx){
+    if(!sel){ return; }
+    var cardsM=movingCards(); if(!cardsM.length){ sel=null; render(); return; }
+    var ok=false;
+    if(targetType==='found'){
+      if(cardsM.length===1 && cardsM[0].s===targetIdx && tryToFoundation(cardsM[0])){
+        snapshot(); clearSource(); state.found[targetIdx]++; ok=true;
+      }
+    } else if(targetType==='free'){
+      if(cardsM.length===1 && !state.free[targetIdx]){
+        snapshot(); var c=cardsM[0]; clearSource(); state.free[targetIdx]=c; ok=true;
+      }
+    } else if(targetType==='col'){
+      var col=state.cols[targetIdx];
+      if(sel.type==='col' && sel.idx===targetIdx){ sel=null; render(); return; }
+      var toEmpty = col.length===0;
+      if(canStackCol(cardsM[0],col) && cardsM.length<=maxMove(toEmpty)){
+        snapshot(); clearSource(); for(var i=0;i<cardsM.length;i++) col.push(cardsM[i]); ok=true;
+      }
+    }
+    if(ok){ moves++; sel=null; checkWin(); }
+    else { sel=null; }
+    render();
+  }
+
+  function autoToAnywhere(card,fromType,fromIdx,start){
+    // double-click: send to foundation if possible, else to a free cell
+    if(card.s!==undefined && card.r===state.found[card.s]+1 &&
+       (fromType==='free' || start===state.cols[fromIdx].length-1)){
+      snapshot();
+      if(fromType==='free') state.free[fromIdx]=null; else state.cols[fromIdx].pop();
+      state.found[card.s]++; moves++; sel=null; checkWin(); render(); return;
+    }
+    if(fromType==='col' && start===state.cols[fromIdx].length-1){
+      for(var f=0;f<4;f++) if(!state.free[f]){
+        snapshot(); state.cols[fromIdx].pop(); state.free[f]=card; moves++; sel=null; render(); return;
+      }
+    }
+    select(fromType,fromIdx,start);
+  }
+
+  function autoFoundations(){
+    var moved=true, did=false;
+    while(moved){
+      moved=false;
+      // free cells
+      for(var f=0;f<4;f++){ var c=state.free[f]; if(c && c.r===state.found[c.s]+1){ if(!did){snapshot();did=true;} state.free[f]=null; state.found[c.s]++; moved=true; } }
+      for(var i=0;i<8;i++){ var col=state.cols[i]; if(col.length){ var t=col[col.length-1]; if(t.r===state.found[t.s]+1){ if(!did){snapshot();did=true;} col.pop(); state.found[t.s]++; moved=true; } } }
+    }
+    if(did){ moves++; checkWin(); } render();
+  }
+
+  function checkWin(){ if(state.found[0]+state.found[1]+state.found[2]+state.found[3]===52) msg.textContent="You win! "+moves+" moves. Deal again?"; }
+
+  function cardEl(card,extra){
+    var d=document.createElement('div');
+    d.className='card'+(isRed(card.s)?' red':'')+(extra||'');
+    d.innerHTML='<span>'+RANK[card.r]+SUIT[card.s]+'</span><span class="big">'+SUIT[card.s]+'</span>';
+    return d;
+  }
+
+  function render(){
+    movesEl.textContent='moves: '+moves+'  |  free: '+freeCount()+'  empty cols: '+emptyCols();
+    cells.innerHTML=''; founds.innerHTML=''; cols.innerHTML='';
+    // free cells
+    for(var f=0;f<4;f++){ (function(f){
+      var slot=document.createElement('div'); slot.className='slot';
+      slot.onclick=function(){ if(sel) attempt('free',f); };
+      if(state.free[f]){ var c=state.free[f];
+        var el=cardEl(c, (sel&&sel.type==='free'&&sel.idx===f)?' sel':'');
+        el.onclick=function(e){ e.stopPropagation(); if(sel) attempt('free',f); else select('free',f); };
+        el.ondblclick=function(e){ e.stopPropagation(); autoToAnywhere(c,'free',f); };
+        slot.appendChild(el);
+      }
+      cells.appendChild(slot);
+    })(f); }
+    // foundations
+    for(var s=0;s<4;s++){ (function(s){
+      var slot=document.createElement('div'); slot.className='slot';
+      slot.innerHTML='<span style="position:absolute;top:4px;left:6px;color:'+(isRed(s)?'#c1121f':'#222')+';font-weight:700">'+SUIT[s]+'</span>';
+      slot.onclick=function(){ if(sel) attempt('found',s); };
+      if(state.found[s]>0){ var el=cardEl({r:state.found[s],s:s}); el.onclick=function(e){e.stopPropagation(); if(sel) attempt('found',s);}; slot.appendChild(el); }
+      founds.appendChild(slot);
+    })(s); }
+    // columns
+    for(var i=0;i<8;i++){ (function(i){
+      var col=state.cols[i];
+      var cdiv=document.createElement('div'); cdiv.className='col';
+      cdiv.style.height=(Math.max(1,col.length)*26+64)+'px';
+      var ph=document.createElement('div'); ph.className='ph'; ph.onclick=function(){ if(sel) attempt('col',i); };
+      cdiv.appendChild(ph);
+      for(var k=0;k<col.length;k++){ (function(k){
+        var c=col[k]; var seld=(sel&&sel.type==='col'&&sel.idx===i&&k>=sel.start)?' sel':'';
+        var el=cardEl(c,seld); el.style.top=(k*26)+'px';
+        el.onclick=function(e){ e.stopPropagation();
+          if(sel){ attempt('col',i); } else { select('col',i,k); } };
+        el.ondblclick=function(e){ e.stopPropagation(); autoToAnywhere(c,'col',i,k); };
+        cdiv.appendChild(el);
+      })(k); }
+      cols.appendChild(cdiv);
+    })(i); }
+  }
+
+  window.game={ deal:deal, undo:undo, autoFoundations:autoFoundations };
+  deal();
+})();
+</script>
+</body>
+</html>
