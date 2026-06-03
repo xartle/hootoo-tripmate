@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trippy :: control panel</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--fg:#c9d1d9;--accent:#2ea043;--accent2:#58a6ff;--mut:#8b949e}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);color:var(--fg)}
+  header{padding:14px 18px;background:linear-gradient(90deg,#0d1117,#161b22);border-bottom:1px solid #30363d}
+  header h1{margin:0;font-size:18px}header h1 b{color:var(--accent)}
+  header .sub{color:var(--mut);font-size:12px}
+  /* battery + device strip */
+  #hw{display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-top:10px}
+  .batt{display:flex;align-items:center;gap:8px}
+  .battbox{position:relative;width:84px;height:22px;border:2px solid var(--mut);border-radius:4px;padding:2px}
+  .battbox:after{content:"";position:absolute;right:-6px;top:6px;width:4px;height:8px;background:var(--mut);border-radius:0 2px 2px 0}
+  .battfill{height:100%;border-radius:2px;transition:width .4s,background .4s}
+  .battpct{font-weight:bold;min-width:42px}
+  .chip{font-size:12px;color:var(--mut)}
+  .chip b{color:var(--fg)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 18px;border-bottom:1px solid #30363d}
+  button{background:var(--panel);color:var(--fg);border:1px solid #30363d;border-radius:6px;padding:7px 12px;cursor:pointer}
+  button:hover{border-color:var(--accent2);color:#fff}
+  button.go{border-color:var(--accent);color:#7ee787}
+  #cmd{flex:1;min-width:240px;background:#010409;color:#7ee787;border:1px solid #30363d;border-radius:6px;padding:7px 10px;font-family:inherit}
+  pre{margin:0;padding:16px 18px;white-space:pre-wrap;word-break:break-word;font-size:13px}
+  #out{min-height:46vh}
+  .mut{color:var(--mut)}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>trippy</b> :: control panel</h1>
+  <div class="sub" id="devline">...</div>
+  <div id="hw">
+    <div class="batt">
+      <div class="battbox"><div class="battfill" id="battfill" style="width:0%;background:var(--mut)"></div></div>
+      <span class="battpct" id="battpct">-</span>
+    </div>
+    <span class="chip"><span class="dot" id="linkdot"></span>eth/wan: <b id="link">?</b></span>
+    <span class="chip">wifi-uplink: <b id="apcli">?</b></span>
+    <span class="chip">uptime: <b id="up">?</b></span>
+    <span class="chip">load: <b id="load">?</b></span>
+    <span class="chip">mem free: <b id="mem">?</b></span>
+  </div>
+</header>
+<div class="bar">
+  <button class="go" onclick="load('cgi-bin/status.cgi','status')">status</button>
+  <button onclick="load('cgi-bin/hw.cgi','hardware (raw)')">hardware</button>
+  <button onclick="load('cgi-bin/wifi.cgi','wifi (cached)')">wifi</button>
+  <button onclick="load('cgi-bin/wifi.cgi?a=scan','wifi scan')">wifi scan</button>
+  <button onclick="load('cgi-bin/loot.cgi','loot')">loot</button>
+  <button onclick="load('cgi-bin/scan.cgi?a=arp','neighbors')">neighbors</button>
+  <input id="shost" placeholder="host" style="width:130px;background:#010409;color:#7ee787;border:1px solid #30363d;border-radius:6px;padding:7px 10px;font-family:inherit" onkeydown="if(event.key==='Enter')scan()">
+  <button onclick="scan()">scan ports</button>
+</div>
+<div class="bar">
+  <input id="cmd" placeholder="shell command (root) - Enter to run" onkeydown="if(event.key==='Enter')run()">
+  <button class="go" onclick="run()">run</button>
+</div>
+<pre id="out" class="mut">pick a panel above...</pre>
+<script>
+var out=document.getElementById('out');
+function load(url,label){
+  out.className=''; out.textContent='... '+(label||url);
+  fetch(url,{cache:'no-store'}).then(r=>r.text()).then(t=>{out.textContent=t;})
+    .catch(e=>{out.textContent='error: '+e;});
+}
+function b64url(s){var b=btoa(unescape(encodeURIComponent(s)));return b.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function run(){
+  var c=document.getElementById('cmd').value; if(!c)return;
+  load('cgi-bin/exec.cgi?c='+b64url(c),'$ '+c);
+}
+function scan(){
+  var h=document.getElementById('shost').value.trim(); if(!h)return;
+  load('cgi-bin/scan.cgi?host='+encodeURIComponent(h),'scan '+h);
+}
+function fmtUp(s){s=parseInt(s||0);var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);
+  return (d?d+'d ':'')+(h?h+'h ':'')+m+'m';}
+function pollHW(){
+  fetch('cgi-bin/hw.cgi',{cache:'no-store'}).then(r=>r.text()).then(t=>{
+    var k={}; t.split('\n').forEach(function(l){var i=l.indexOf('=');if(i>0)k[l.slice(0,i)]=l.slice(i+1).trim();});
+    var b=parseInt(k.battery); if(!isNaN(b)){
+      var col=b>50?'var(--accent)':b>20?'#d29922':'#f85149';
+      document.getElementById('battfill').style.width=b+'%';
+      document.getElementById('battfill').style.background=col;
+      document.getElementById('battpct').textContent=b+'%';
+    }
+    var link=k.net_link==='1';
+    document.getElementById('link').textContent=link?'up':'down';
+    document.getElementById('linkdot').style.background=link?'var(--accent)':'#f85149';
+    document.getElementById('apcli').textContent=k.apcli_status==='1'?'connected':'-';
+    document.getElementById('up').textContent=fmtUp(k.uptime);
+    document.getElementById('load').textContent=k.loadavg||'?';
+    if(k.memfree_kb&&k.memtotal_kb)
+      document.getElementById('mem').textContent=Math.round(k.memfree_kb/1024)+'/'+Math.round(k.memtotal_kb/1024)+' MB';
+    var model=k.info_CURFILE||'TripMate', ver=k.info_CURVER||'', vend=k.info_VENDOR||'';
+    document.getElementById('devline').textContent=vend+' '+model+(ver?' | fw '+ver:'')+' | MT'+(k.info_CPU||'')+' | busybox 1.31 | USB extern_package';
+  }).catch(function(){});
+}
+pollHW(); setInterval(pollHW,15000);
+load('cgi-bin/status.cgi','status');
+</script>
+</body>
+</html>

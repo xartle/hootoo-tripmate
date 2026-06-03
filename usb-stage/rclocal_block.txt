@@ -1,0 +1,19 @@
+
+# --- trippy autoload (added; loads extern_package from USB after it mounts) ---
+(
+  n=0
+  while [ $n -lt 30 ]; do
+    for V in /data/UsbDisk1/Volume1 /data/UsbDisk1/Volume2 /data/UsbDisk2/Volume1 /data/UsbDisk2/Volume2; do
+      if [ -f "$V/extern_package" ]; then
+        if ! grep -q " /tmp/extern " /proc/mounts; then
+          mkdir -p /tmp/extern
+          mount -o loop "$V/extern_package" /tmp/extern 2>/dev/null
+        fi
+        [ -f /tmp/extern/etc/init.d/startup.sh ] && TRIPPY_SKIN=1 sh /tmp/extern/etc/init.d/startup.sh
+        exit 0
+      fi
+    done
+    n=$((n+1)); sleep 2
+  done
+) &
+# --- end trippy autoload ---

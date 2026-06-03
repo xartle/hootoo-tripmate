@@ -1,0 +1,10 @@
+<script>
+/* trippy stock-UI takeover banner (self-contained, no external load/auth) */
+document.addEventListener("DOMContentLoaded",function(){
+  var d=document.createElement("div");
+  d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#0d1117;color:#7ee787;font:13px/1.4 ui-monospace,monospace;padding:6px 10px;text-align:center;border-bottom:2px solid #2ea043";
+  d.innerHTML='&#9889; trippy: stock UI overlaid from USB extern_package &nbsp;|&nbsp; <a style="color:#58a6ff" href="http://'+location.hostname+':8080/">open control panel</a>';
+  document.body.insertBefore(d,document.body.firstChild);
+  document.body.style.marginTop="34px";
+});
+</script>

@@ -1,0 +1,6 @@
+# generated ext2 image — rebuild with: usb-stage/build-image.sh
+usb-stage/extern_package
+
+# editor/OS cruft
+*.swp
+.DS_Store
