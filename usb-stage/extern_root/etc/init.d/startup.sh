@@ -57,5 +57,17 @@ if [ "$TRIPPY_SKIN" = "1" ] && [ -f "$STOCK" ] && ! mount | grep -q " $STOCK "; 
     mount -o bind "$PATCH" "$STOCK" && echo "stock UI skinned (bind-mount over main.html)"
 fi
 
+# --- 4. wardriving: cron the ra0 site-survey logger every 5 min ------------
+mkdir -p /tmp/crontabs
+echo "*/5 * * * * $BASE/opt/bin/wardrive.sh >/dev/null 2>&1" > /tmp/crontabs/root
+if pidof crond >/dev/null 2>&1; then
+    echo "crond already running"
+else
+    "$BIN/crond" -c /tmp/crontabs -L "$BASE/run/crond.log"
+    echo "crond started (wardrive.sh every 5 min)"
+fi
+# kick off one scan now so there's immediate data (backgrounded; ~5s)
+"$BASE/opt/bin/wardrive.sh" >/dev/null 2>&1 &
+
 echo "startup complete. panel: http://<device-ip>:$HTTP_PORT/"
 exit 0
