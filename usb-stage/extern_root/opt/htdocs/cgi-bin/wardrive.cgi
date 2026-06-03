@@ -1,25 +1,43 @@
 #!/bin/sh
 PATH=/tmp/bin:$PATH; export PATH
 a=$(echo "$QUERY_STRING" | sed -n 's/^.*a=\([^&]*\).*$/\1/p')
-CSV=""
-for V in /data/UsbDisk*/Volume*; do [ -f "$V/wardrive.csv" ] && CSV="$V/wardrive.csv" && break; done
 
+USBDIR=/data/UsbDisk1/Volume1
+for V in /data/UsbDisk*/Volume*; do [ -f "$V/extern_package" ] && USBDIR="$V" && break; done
+CSV="$USBDIR/wardrive.csv"
+MODE_FILE="$USBDIR/wardrive.mode"
+
+# raw CSV download
 if [ "$a" = csv ]; then
   echo "Content-type: text/csv"
   echo "Content-Disposition: attachment; filename=wardrive.csv"; echo
-  [ -n "$CSV" ] && cat "$CSV"
+  [ -f "$CSV" ] && cat "$CSV"
   exit 0
 fi
 
+# on/off toggle
+case "$a" in
+  on)  echo on  > "$MODE_FILE" ;;
+  off) echo off > "$MODE_FILE" ;;
+  toggle) cur=on; [ -f "$MODE_FILE" ] && cur=$(cat "$MODE_FILE")
+          [ "$cur" = on ] && echo off > "$MODE_FILE" || echo on > "$MODE_FILE" ;;
+esac
+
 echo "Content-type: text/plain"; echo
-[ -z "$CSV" ] && { echo "no wardrive.csv yet -- cron scans ra0 every 5 min; first scan may be pending."; echo "trigger one now from the command box:  /tmp/extern/opt/bin/wardrive.sh"; exit 0; }
+mode=on; [ -f "$MODE_FILE" ] && mode=$(cat "$MODE_FILE")
+sta=$(iwpriv ra0 get_mac_table 2>/dev/null | grep -cE '([0-9a-fA-F]{2}:){5}')
+echo "# wardrive   mode=$mode   wifi_clients_now=$sta   (toggle: wardrive.cgi?a=toggle)"
+[ "$mode" = on ] && [ "$sta" -gt 0 ] && echo "#   -> scans are PAUSED while $sta client(s) connected (auto-resumes when idle)"
+[ -f "$USBDIR/wardrive.status" ] && echo "# last run: $(cat "$USBDIR/wardrive.status")"
+echo
+
+[ -f "$CSV" ] || { echo "no wardrive.csv yet -- cron scans ra0 every 5 min when idle & enabled."; exit 0; }
 
 total=$(( $(wc -l < "$CSV") - 1 ))
 ubss=$(tail -n +2 "$CSV" | cut -d, -f3 | sort -u | wc -l)
 ussid=$(tail -n +2 "$CSV" | cut -d, -f6 | grep -v '^$' | sort -u | wc -l)
 first=$(sed -n 2p "$CSV" | cut -d, -f1)
 last=$(tail -n 1 "$CSV" | cut -d, -f1)
-echo "# wardrive log  ($CSV)"
 echo "sightings=$total   unique_bssid=$ubss   unique_ssid=$ussid"
 echo "first=$first   last=$last"
 echo

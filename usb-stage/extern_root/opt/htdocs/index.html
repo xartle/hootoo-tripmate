@@ -57,6 +57,7 @@
   <input id="shost" placeholder="host" style="width:130px;background:#010409;color:#7ee787;border:1px solid #30363d;border-radius:6px;padding:7px 10px;font-family:inherit" onkeydown="if(event.key==='Enter')scan()">
   <button onclick="scan()">scan ports</button>
   <button onclick="load('cgi-bin/wardrive.cgi','wardrive log')">wardrive</button>
+  <button onclick="load('cgi-bin/wardrive.cgi?a=toggle','wardrive toggle')">wardrive on/off</button>
 </div>
 <div class="bar">
   <input id="cmd" placeholder="shell command (root) - Enter to run" onkeydown="if(event.key==='Enter')run()">
