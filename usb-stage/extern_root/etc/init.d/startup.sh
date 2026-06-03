@@ -46,15 +46,14 @@ else
     echo "httpd started on :$HTTP_PORT (docroot $BASE/opt/htdocs)"
 fi
 
-# --- 3. (optional) skin the stock UI: inject a banner into /www/app/main.html
-# Single-file bind-mount: build a patched copy, overlay it. umount restores.
+# --- 3. (optional) takeover: replace the stock landing with our vacation portal
+# Full-page bind-mount over main.html (games + slim app links). umount restores.
 STOCK=/www/app/main.html
-PATCH="$BASE/run/main.html"
-if [ "$TRIPPY_SKIN" = "1" ] && [ -f "$STOCK" ] && ! mount | grep -q " $STOCK "; then
-    "$BIN/busybox" awk -v injf="$BASE/opt/skin_inject.html" \
-      'BEGIN{while((getline l < injf)>0) inj=inj l "\n"} /<\/head>/{printf "%s",inj} {print}' \
-      "$STOCK" > "$PATCH"
-    mount -o bind "$PATCH" "$STOCK" && echo "stock UI skinned (bind-mount over main.html)"
+USBDIR=/data/UsbDisk1/Volume1
+for V in /data/UsbDisk*/Volume*; do [ -f "$V/extern_package" ] && USBDIR="$V" && break; done
+mkdir -p "$USBDIR/games" 2>/dev/null      # so portal game links resolve
+if [ "$TRIPPY_SKIN" = "1" ] && [ -f "$STOCK" ] && [ -f "$BASE/opt/portal.html" ] && ! mount | grep -q " $STOCK "; then
+    mount -o bind "$BASE/opt/portal.html" "$STOCK" && echo "stock landing replaced with trippy portal"
 fi
 
 # --- 4. wardriving: cron the ra0 site-survey logger every 5 min ------------

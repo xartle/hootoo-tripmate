@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trippy</title>
+<style>
+  :root{--bg:#0d1117;--card:#161b22;--fg:#e6edf3;--mut:#8b949e;--accent:#2ea043;--accent2:#58a6ff;--brd:#30363d}
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.5 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+  header{padding:18px 22px;border-bottom:1px solid var(--brd);display:flex;flex-wrap:wrap;align-items:baseline;gap:14px}
+  header h1{margin:0;font-size:22px;font-weight:800}
+  header h1 b{color:var(--accent)}
+  header .tag{color:var(--mut);font-size:13px;flex:1;min-width:160px}
+  header nav a{color:var(--mut);text-decoration:none;font-size:13px;margin-left:14px;border-bottom:1px dotted transparent}
+  header nav a:hover{color:var(--accent2);border-bottom-color:var(--accent2)}
+  .wrap{max-width:1000px;margin:0 auto;padding:26px 22px}
+  h2{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+  a.card{display:block;background:var(--card);border:1px solid var(--brd);border-radius:12px;padding:18px 18px 16px;
+         text-decoration:none;color:var(--fg);transition:border-color .15s,transform .05s;position:relative}
+  a.card:hover{border-color:var(--accent2);transform:translateY(-1px)}
+  a.card .ico{font-size:30px;line-height:1}
+  a.card .name{font-weight:700;margin-top:10px;font-size:18px}
+  a.card .desc{color:var(--mut);font-size:13px;margin-top:4px}
+  a.card.missing{opacity:.45;pointer-events:none}
+  .badge{position:absolute;top:12px;right:12px;font-size:10px;letter-spacing:.05em;text-transform:uppercase;
+         color:var(--mut);border:1px solid var(--brd);border-radius:6px;padding:2px 6px}
+  .badge.ok{color:#7ee787;border-color:#2ea043}
+  footer{color:var(--mut);font-size:12px;text-align:center;padding:24px}
+  footer a{color:var(--accent2);text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>trippy</b> vacation box</h1>
+  <span class="tag">offline games &amp; media &mdash; pick something below</span>
+  <nav>
+    <a href="explorer/dlna.html">Media</a>
+    <a href="explorer/explorer.html">Files</a>
+    <a href="metro.html">TripMate App</a>
+    <a href="set.html">Settings</a>
+    <a id="admin" href="#">Admin</a>
+  </nav>
+</header>
+<div class="wrap">
+  <h2>Games</h2>
+  <div class="grid" id="games"></div>
+</div>
+<footer>
+  served from the USB stick &middot; battery, wifi scan &amp; wardrive log live in the
+  <a id="adminlink" href="#">admin panel</a>
+</footer>
+<script>
+  // admin panel is our busybox httpd on :8080 (same host)
+  var adminUrl = location.protocol + "//" + location.hostname + ":8080/";
+  document.getElementById("admin").href = adminUrl;
+  document.getElementById("adminlink").href = adminUrl;
+
+  // games live on the stick, served by the stock :80 fileserv
+  var BASE = "/data/UsbDisk1/Volume1/games/";
+  var GAMES = [
+    {slug:"brogue",    ico:"&#128481;", name:"Brogue CE",  desc:"deep roguelike dungeon crawl"},
+    {slug:"mindustry", ico:"&#9881;",   name:"Mindustry",  desc:"tower-defense factory builder"},
+    {slug:"openttd",   ico:"&#128642;", name:"OpenTTD",    desc:"transport tycoon empire"},
+    {slug:"freeciv",   ico:"&#127963;", name:"Freeciv",    desc:"build a civilization"},
+    {slug:"chess",     ico:"&#9822;",   name:"Chess",      desc:"vs Stockfish engine"},
+    {slug:"freecell",  ico:"&#127137;", name:"FreeCell",   desc:"classic solitaire"}
+  ];
+  var g = document.getElementById("games");
+  GAMES.forEach(function(game){
+    var url = BASE + game.slug + "/index.html";
+    var a = document.createElement("a");
+    a.className = "card missing";
+    a.href = url;
+    a.innerHTML = '<div class="ico">'+game.ico+'</div><div class="name">'+game.name+'</div>'+
+                  '<div class="desc">'+game.desc+'</div><span class="badge">checking...</span>';
+    g.appendChild(a);
+    // mark installed/not by probing the game's index.html
+    fetch(url, {method:"HEAD"}).then(function(r){
+      var b = a.querySelector(".badge");
+      if(r.ok){ a.className="card"; b.className="badge ok"; b.textContent="play"; }
+      else    { b.textContent="not installed"; }
+    }).catch(function(){ a.querySelector(".badge").textContent="not installed"; });
+  });
+</script>
+</body>
+</html>
