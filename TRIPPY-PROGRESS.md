@@ -109,3 +109,25 @@ Likely dead-end on this box: kernel is **2.6.36** (current Entware targets ≥3.
 ## Working method notes
 - Drive the device over telnet from the laptop with the throwaway Python helpers in `/tmp` (`tnx.py` = one-command-with-login; threaded-reader variants for long ops). Closing the telnet session SIGHUPs running commands (no `nohup`/`setsid` on device) — keep one session open for long tasks.
 - Device shell is busybox 1.12 ash: supports `local`, `let`, `$(())`, `${##}`, `${%}` but lacks many applets — prepend `/tmp/bin` (modern busybox) on PATH inside CGIs.
+
+## Resume here (next session, as of 2026-06-04)
+Repo clean, both remotes synced at the latest commit. State of play:
+1. **Build the new low-profile USB stick:** format FAT32, mount, then
+   `usb-stage/build-stick.sh /path/to/stick`. Bundled games (freecell/sudoku/wordle)
+   work out of the box; run `usb-stage/games/fetch-games.sh` on a laptop first to add
+   the big ones (brogue/mindustry/openttd/freeciv), then re-run build-stick.
+2. **On a fresh device:** persist the rc.local boot hook once (see persistence section)
+   or run the 3 manual mount commands; the hook already passes `TRIPPY_SKIN=1` (portal on).
+3. **OPEN THREAD — "phone home" tunnel:** user asked about Tailscale back to their house.
+   Verdict: full Tailscale (Go userspace-WG) is too heavy here — ~41 MB free RAM vs
+   tailscaled's 30–60 MB RSS, plus ~1–5 Mbps crypto ceiling on the 386-BogoMIPS core and
+   old-kernel Go risk. RECOMMENDED instead: **reverse-SSH via dropbear `dbclient`** (tiny,
+   static mipsel, dials home `ssh -R`, exposes :8080/shell), wired into the bundle with a
+   keep-alive loop + `phone-home on/off` panel toggle (like wardrive). Middle option:
+   **boringtun** (Rust userspace WireGuard) peer to a home WG endpoint. TODO when device is
+   up: confirm `/dev/net/tun` + TUN kernel support + exact free RAM before building it.
+4. **Transfer reminder:** don't push big files to a running device over telnet (slow/lossy
+   pty) and the WSL laptop's INBOUND is NAT-blocked (device→laptop wget stalls). Clean path:
+   write to the stick via build-stick.sh and re-seat, or wget from a real LAN host (acorn).
+5. Live device currently runs the OLD 6-card portal + a partial wordle — irrelevant, the
+   freshly-built stick supersedes it. Panel creds: live `trippy/hootoo`, repo `trippy/changeme`.
