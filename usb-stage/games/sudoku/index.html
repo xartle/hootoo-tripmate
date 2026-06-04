@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+<title>Sudoku</title>
+<style>
+  :root{--bg:#0d1117;--fg:#e6edf3;--mut:#8b949e;--accent:#58a6ff;--given:#fff;--err:#f85149;--cell:#161b22;--sel:#1f6feb}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;
+       display:flex;flex-direction:column;align-items:center;min-height:100vh}
+  header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;padding:14px}
+  header h1{margin:0 8px 0 0;font-size:20px;font-weight:800}
+  select,button{background:#161b22;color:var(--fg);border:1px solid #30363d;border-radius:8px;padding:7px 11px;font:inherit;cursor:pointer}
+  button:hover,select:hover{border-color:var(--accent)}
+  #msg{color:#7ee787;font-weight:700;min-height:22px}
+  .grid{display:grid;grid-template-columns:repeat(9,1fr);width:min(94vw,468px);aspect-ratio:1;
+        background:var(--mut);gap:1px;border:3px solid var(--mut);border-radius:6px;touch-action:manipulation}
+  .c{background:var(--cell);display:flex;align-items:center;justify-content:center;font-size:min(6.2vw,30px);
+     cursor:pointer;user-select:none;position:relative}
+  .c.given{color:var(--given);font-weight:800}
+  .c:not(.given){color:var(--accent)}
+  .c.sel{background:var(--sel);color:#fff}
+  .c.peer{background:#13243b}
+  .c.same{background:#1c2f4a}
+  .c.err{color:var(--err)}
+  /* 3x3 block separators */
+  .c[data-r="2"],.c[data-r="5"]{border-bottom:2px solid var(--mut)}
+  .c[data-cc="2"],.c[data-cc="5"]{border-right:2px solid var(--mut)}
+  .pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:min(94vw,468px);margin:14px 0}
+  .pad button{padding:14px 0;font-size:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sudoku</h1>
+  <select id="diff">
+    <option value="40">Easy</option>
+    <option value="32" selected>Medium</option>
+    <option value="26">Hard</option>
+    <option value="22">Expert</option>
+  </select>
+  <button onclick="game.neww()">New</button>
+  <button onclick="game.erase()">Erase</button>
+  <button onclick="game.hint()">Hint</button>
+</header>
+<div id="msg"></div>
+<div class="grid" id="grid"></div>
+<div class="pad" id="pad"></div>
+<script>
+(function(){
+  var grid=document.getElementById('grid'), pad=document.getElementById('pad'), msg=document.getElementById('msg');
+  var puzzle, solution, given, sel=-1;
+
+  function rc(i){ return [Math.floor(i/9), i%9]; }
+  function box(r,c){ return Math.floor(r/3)*3 + Math.floor(c/3); }
+  function shuffled(){ var a=[1,2,3,4,5,6,7,8,9]; for(var i=8;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;} return a; }
+
+  function valid(b,i,v){
+    var r=Math.floor(i/9), c=i%9;
+    for(var k=0;k<9;k++){
+      if(b[r*9+k]===v) return false;
+      if(b[k*9+c]===v) return false;
+    }
+    var br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+    for(var y=0;y<3;y++)for(var x=0;x<3;x++) if(b[(br+y)*9+(bc+x)]===v) return false;
+    return true;
+  }
+  function solveFill(b){ // fill solution via randomized backtracking
+    var i=b.indexOf(0); if(i<0) return true;
+    var nums=shuffled();
+    for(var n=0;n<9;n++){ if(valid(b,i,nums[n])){ b[i]=nums[n]; if(solveFill(b)) return true; b[i]=0; } }
+    return false;
+  }
+  function countSolutions(b,limit){
+    var i=b.indexOf(0); if(i<0) return 1;
+    var cnt=0;
+    for(var v=1;v<=9;v++){ if(valid(b,i,v)){ b[i]=v; cnt+=countSolutions(b,limit); b[i]=0; if(cnt>=limit) return cnt; } }
+    return cnt;
+  }
+  function generate(targetGivens){
+    var b=new Array(81).fill(0); solveFill(b); solution=b.slice();
+    // dig holes keeping a unique solution
+    var order=[]; for(var i=0;i<81;i++) order.push(i);
+    for(var i=80;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=order[i];order[i]=order[j];order[j]=t;}
+    var puz=b.slice(), removed=0, toRemove=81-targetGivens;
+    for(var k=0;k<order.length && removed<toRemove;k++){
+      var idx=order[k], save=puz[idx]; if(save===0) continue;
+      puz[idx]=0;
+      if(countSolutions(puz.slice(),2)!==1){ puz[idx]=save; } else { removed++; }
+    }
+    puzzle=puz; given=puz.map(function(v){return v!==0;});
+  }
+
+  function neww(){
+    var g=parseInt(document.getElementById('diff').value,10);
+    msg.textContent='generating...';
+    setTimeout(function(){ generate(g); sel=-1; render(); msg.textContent=''; }, 20);
+  }
+  function setVal(v){
+    if(sel<0 || given[sel]) return;
+    puzzle[sel]= (puzzle[sel]===v?0:v); render(); checkWin();
+  }
+  function erase(){ if(sel>=0 && !given[sel]){ puzzle[sel]=0; render(); } }
+  function hint(){ if(sel>=0 && !given[sel]){ puzzle[sel]=solution[sel]; given[sel]=true; render(); checkWin(); } }
+
+  function conflict(i){
+    var v=puzzle[i]; if(!v) return false;
+    var r=Math.floor(i/9), c=i%9;
+    for(var k=0;k<9;k++){ if(k!==c && puzzle[r*9+k]===v) return true; if(k!==r && puzzle[k*9+c]===v) return true; }
+    var br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+    for(var y=0;y<3;y++)for(var x=0;x<3;x++){ var j=(br+y)*9+(bc+x); if(j!==i && puzzle[j]===v) return true; }
+    return false;
+  }
+  function checkWin(){
+    for(var i=0;i<81;i++){ if(puzzle[i]===0 || puzzle[i]!==solution[i]) return; }
+    msg.textContent='Solved! New game?';
+  }
+  function render(){
+    grid.innerHTML='';
+    var selV = sel>=0 ? puzzle[sel] : 0;
+    for(var i=0;i<81;i++){ (function(i){
+      var r=Math.floor(i/9), c=i%9;
+      var d=document.createElement('div'); d.className='c'; d.dataset.r=r; d.dataset.cc=c;
+      if(given[i]) d.className+=' given';
+      if(i===sel) d.className+=' sel';
+      else if(sel>=0){
+        var sr=Math.floor(sel/9), sc=sel%9;
+        if(r===sr||c===sc||box(r,c)===box(sr,sc)) d.className+=' peer';
+        if(selV && puzzle[i]===selV) d.className+=' same';
+      }
+      if(puzzle[i] && conflict(i)) d.className+=' err';
+      d.textContent= puzzle[i] ? puzzle[i] : '';
+      d.onclick=function(){ sel=i; render(); };
+      grid.appendChild(d);
+    })(i); }
+  }
+  // number pad
+  for(var n=1;n<=9;n++){ (function(n){ var b=document.createElement('button'); b.textContent=n; b.onclick=function(){ setVal(n); }; pad.appendChild(b); })(n); }
+  document.addEventListener('keydown',function(e){
+    if(e.key>='1'&&e.key<='9') setVal(parseInt(e.key,10));
+    else if(e.key==='Backspace'||e.key==='Delete'||e.key==='0') erase();
+    else if(sel>=0){ var r=Math.floor(sel/9),c=sel%9;
+      if(e.key==='ArrowLeft'&&c>0)sel--; else if(e.key==='ArrowRight'&&c<8)sel++;
+      else if(e.key==='ArrowUp'&&r>0)sel-=9; else if(e.key==='ArrowDown'&&r<8)sel+=9; else return; render(); }
+  });
+  window.game={ neww:neww, erase:erase, hint:hint };
+  neww();
+})();
+</script>
+</body>
+</html>

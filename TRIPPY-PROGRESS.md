@@ -34,7 +34,22 @@ Everything lives in **`usb-stage/`** in this repo.
   - **Battery + hardware:** `hw.cgi` reads `/proc/vs_battery_quantity` (battery %), `/proc/vs_net_link_status`, `/proc/vs_80211n_apcli0_connect_status`, `/proc/vstinfo` (model HT-TM05/fw/vendor/CPU), load/mem/uptime. `index.html` renders a live battery bar + device strip, polling every 15s. (No thermal sensor exposed.)
   - **Scanner (nmap-like):** `scan.cgi` — `?a=arp` lists neighbors from `/proc/net/arp`; `?host=H[&p=22,80,443|p=1-1024]` does an `nc` TCP connect-scan (busybox `nc` present; rc=0 open). Verified.
   - **Stock-UI takeover (vacation portal):** `TRIPPY_SKIN=1 sh startup.sh` bind-mounts `opt/portal.html` **over** `/www/app/main.html`, replacing the media-heavy stock launcher with a games-first portal (6 game cards + slim links to the stock app: `metro.html`, `explorer/explorer.html`, `explorer/dlna.html`, `set.html` + the `:8080` admin panel). Reversible (`teardown.sh` / `umount` / reboot). The rc.local boot hook already passes `TRIPPY_SKIN=1`, so it's persistent. (`opt/skin_inject.html` is the older banner-only variant, kept as a lighter alternative.) portal.html is pure ASCII (emoji via `&#...;` entities) for telnet-push safety.
-  - **Games portal:** `usb-stage/games/` holds scaffolding ONLY (README, `fetch-games.sh`, per-dir `.gitkeep`; payloads gitignored). Games are large so they live on the **FAT stick root** at `/data/UsbDisk1/Volume1/games/<slug>/`, served by the stock `fileserv` on **:80** (verified it serves stick files; link the `index.html` *file* — a directory path 401s). portal.html HEAD-probes each game and shows installed/not. Populate via `fetch-games.sh` on a laptop/acorn (device `wget` is HTTP-only; sources are HTTPS), then copy to the stick. Picks: Brogue CE, Mindustry Classic, OpenTTD, Freeciv (or Micropolis = static SimCity alt), Chess (chessboard.js+stockfish.js), FreeCell. Caveat: threaded WASM needs COOP/COEP headers `fileserv` won't send — prefer single-threaded/asm.js builds.
+  - **Games portal:** `usb-stage/games/` holds scaffolding ONLY (README, `fetch-games.sh`, per-dir `.gitkeep`; payloads gitignored). Games are large so they live on the **FAT stick root** at `/data/UsbDisk1/Volume1/games/<slug>/`, served by the stock `fileserv` on **:80** (verified it serves stick files; link the `index.html` *file* — a directory path 401s). portal.html HEAD-probes each game and shows installed/not. Populate via `fetch-games.sh` on a laptop/acorn (device `wget` is HTTP-only; sources are HTTPS), then copy to the stick. 8 cards: Brogue, Mindustry, OpenTTD, Freeciv (or Micropolis = static SimCity alt), Chess, FreeCell, Sudoku, Wordle. **FreeCell, Sudoku, and Wordle are bundled** — our own self-contained single-file games (committed; work out of the box). Wordle embeds an offline list (2315 answers + 14855 valid guesses). The other four are large WASM/asset downloads via `fetch-games.sh` (laptop-side; device `wget` is HTTP-only). Caveat: threaded WASM needs COOP/COEP headers `fileserv` won't send — prefer single-threaded/asm.js builds.
+
+## Rebuilding the USB stick (one command)
+On a laptop with a freshly **FAT32-formatted** stick mounted:
+```
+usb-stage/build-stick.sh /path/to/mounted/stick
+```
+It runs `build-image.sh` (makes `extern_package`) and copies the image + every
+populated `games/<slug>/` to the stick. Out of the box you get freecell/sudoku/wordle;
+run `usb-stage/games/fetch-games.sh` first to add the big ones, then re-run. Add media
+anywhere on the stick (stock Files/Media app serves it). On a fresh device, persist the
+rc.local boot hook once (above) or run the 3 manual mount commands to start immediately.
+
+NOTE on transferring to a device already running: telnet pushes are slow/lossy for big
+files; the clean path is to write files onto the stick directly (build-stick.sh) and
+re-seat it, or `wget` from a real LAN host (the WSL laptop's inbound is NAT-blocked).
 
   ASCII-only matters: the telnet pty mangles multibyte UTF-8 (and drops ~1% on bulk), so keep htdocs/scripts pure ASCII when pushing over telnet. Files inside the ext2 image (from USB) are byte-exact regardless.
 
