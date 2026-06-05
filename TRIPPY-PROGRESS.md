@@ -111,23 +111,42 @@ Likely dead-end on this box: kernel is **2.6.36** (current Entware targets ≥3.
 - Device shell is busybox 1.12 ash: supports `local`, `let`, `$(())`, `${##}`, `${%}` but lacks many applets — prepend `/tmp/bin` (modern busybox) on PATH inside CGIs.
 
 ## Resume here (next session, as of 2026-06-04)
-Repo clean, both remotes synced at the latest commit. State of play:
-1. **Build the new low-profile USB stick:** format FAT32, mount, then
-   `usb-stage/build-stick.sh /path/to/stick`. Bundled games (freecell/sudoku/wordle)
-   work out of the box; run `usb-stage/games/fetch-games.sh` on a laptop first to add
-   the big ones (brogue/mindustry/openttd/freeciv), then re-run build-stick.
-2. **On a fresh device:** persist the rc.local boot hook once (see persistence section)
-   or run the 3 manual mount commands; the hook already passes `TRIPPY_SKIN=1` (portal on).
-3. **OPEN THREAD — "phone home" tunnel:** user asked about Tailscale back to their house.
-   Verdict: full Tailscale (Go userspace-WG) is too heavy here — ~41 MB free RAM vs
-   tailscaled's 30–60 MB RSS, plus ~1–5 Mbps crypto ceiling on the 386-BogoMIPS core and
-   old-kernel Go risk. RECOMMENDED instead: **reverse-SSH via dropbear `dbclient`** (tiny,
-   static mipsel, dials home `ssh -R`, exposes :8080/shell), wired into the bundle with a
-   keep-alive loop + `phone-home on/off` panel toggle (like wardrive). Middle option:
-   **boringtun** (Rust userspace WireGuard) peer to a home WG endpoint. TODO when device is
-   up: confirm `/dev/net/tun` + TUN kernel support + exact free RAM before building it.
-4. **Transfer reminder:** don't push big files to a running device over telnet (slow/lossy
-   pty) and the WSL laptop's INBOUND is NAT-blocked (device→laptop wget stalls). Clean path:
-   write to the stick via build-stick.sh and re-seat, or wget from a real LAN host (acorn).
-5. Live device currently runs the OLD 6-card portal + a partial wordle — irrelevant, the
-   freshly-built stick supersedes it. Panel creds: live `trippy/hootoo`, repo `trippy/changeme`.
+Repo clean, both remotes synced. Device `192.168.0.192` is back up and healthy.
+
+### Games (9 working, in the portal)
+- **Bundled** (self-contained single files, committed, no fetch): freecell, sudoku, wordle,
+  **minesweeper, tetris, solitaire, mahjong** (the last 4 added this session). Mahjong uses a
+  reverse-deal generator proven solvable (2000-deal node test). All zero-dep, run over plain HTTP.
+- **Fetched** (third-party payloads, gitignored — re-run `games/fetch-games.sh` on a fresh clone):
+  - **chess** = chessboard.js + chess.js + **Stockfish 18 lite-single** (single-threaded asm/wasm,
+    no SharedArrayBuffer → works on busybox httpd with no COOP/COEP). ~7.3 MB.
+  - **brogue** = freethenation/broguejs **asm.js** build; jQuery localized; demo banner hidden;
+    FOLIAGE_CHAR (Aries U+2648) remapped to psi U+03A8 + VS15 so foliage isn't a color-emoji tile.
+- **Removed:** freeciv (client-server stack, can't be static). **TODO (need a real build, not a
+  fetch):** mindustry (Gradle/TexturePacker atlas) and openttd (emscripten + OpenGFX) — kept as
+  notes in fetch-games.sh, dropped from the portal.
+
+### Device state + how to push to it (LEARNED this session)
+- Panel is LIVE on `:8080` and the **CGIs are at `/cgi-bin/*.cgi`** (NOT `/`). exec.cgi runs as
+  **root**; PATH has `/tmp/bin` (busybox 1.31 → has `base64`,`md5sum`). Creds: live `trippy/hootoo`,
+  repo `trippy/changeme`.
+- **Network push recipe (works, used for the brogue fixes):** base64url the command into
+  `?c=` at `http://192.168.0.192:8080/cgi-bin/exec.cgi`; upload a file as base64 in ~1000-char
+  chunks via `printf %s 'CHUNK' >> /tmp/x.b64` (loop `while read … || [ -n "$line" ]` — the last
+  partial chunk has no newline!), then `base64 -d`, md5-verify, `cp` onto the stick, `sync`.
+  This writes straight to the FAT stick in the device → sidesteps "WSL can't see USB".
+- The stick already has all 9 game files (copied from `~/trippy-out`). The **fixed brogue/index.html
+  is pushed and verified live** (md5 d85597b3…).
+
+### OPEN / TODO
+1. **Portal on the device is stale** — it lists the OLD card set, so it won't surface the 4 new
+   bundled games even though their files are on the stick. `portal.html` lives INSIDE the ext2
+   image (mounted rw at `/tmp/extern/opt/htdocs/`). To fix: push the 9-card `portal.html` into the
+   image (same exec.cgi recipe) — or re-seat a freshly-built stick. Not done yet (chose brogue-only).
+2. **"phone home" tunnel (still open):** Tailscale too heavy (~41 MB free RAM vs 30–60 MB RSS,
+   1–5 Mbps crypto ceiling, old-kernel Go risk). RECOMMENDED: reverse-SSH via dropbear `dbclient`
+   (`ssh -R`, keep-alive loop + `phone-home on/off` panel toggle). Middle option: boringtun. TODO:
+   confirm `/dev/net/tun` + TUN kernel support + free RAM before building.
+3. **Building the stick:** `build-stick.sh /path/to/FAT32/stick` (or `~/trippy-out` then copy in
+   Explorer, since WSL can't mount the USB). `extern_package` is an **ext2 image (8 MB file, not a
+   dir)** built from `extern_root/` — it's how exec bits survive on FAT.
