@@ -209,9 +209,12 @@ fetch_brogue(){
   # Hide the upstream demo banner (we launch this from our own portal). Hidden via
   # CSS rather than deleted, because the launcher's init still references #request-fullscreen.
   sed -i 's|</head>|<style>#project-info{display:none!important}</style></head>|' index.html
-  # Force text (non-emoji) glyph rendering: some symbol codepoints (e.g. Virgo U+264D)
-  # get swapped for color emoji on canvas. Appending VS15 (U+FE0E) forces a text glyph.
-  sed -i 's|String.fromCharCode(char), x, y|String.fromCharCode(char,0xFE0E), x, y|' index.html
+  # Stop symbol codepoints rendering as color emoji on the canvas. VS15 (U+FE0E)
+  # requests a text glyph, but it's unreliable on Windows -- so also remap Brogue's
+  # FOLIAGE_CHAR (Aries U+2648, ubiquitous terrain that showed as a purple emoji tile)
+  # to psi U+03A8 (pure-text, plant-like; the broguejs author's own commented original).
+  # Add more `char===0xNNNN?0xMMMM:` clauses here if other glyphs ever show as emoji.
+  sed -i 's|String.fromCharCode(char), x, y|String.fromCharCode(char===0x2648?0x03A8:char,0xFE0E), x, y|' index.html
   cd ..
   echo "  OK -> brogue/index.html (asm.js Brogue, fully offline). Arrow keys / mouse to play."
 }
