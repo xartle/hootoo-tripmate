@@ -210,11 +210,18 @@ fetch_brogue(){
   # CSS rather than deleted, because the launcher's init still references #request-fullscreen.
   sed -i 's|</head>|<style>#project-info{display:none!important}</style></head>|' index.html
   # Stop symbol codepoints rendering as color emoji on the canvas. VS15 (U+FE0E)
-  # requests a text glyph, but it's unreliable on Windows -- so also remap Brogue's
-  # FOLIAGE_CHAR (Aries U+2648, ubiquitous terrain that showed as a purple emoji tile)
-  # to psi U+03A8 (pure-text, plant-like; the broguejs author's own commented original).
-  # Add more `char===0xNNNN?0xMMMM:` clauses here if other glyphs ever show as emoji.
-  sed -i 's|String.fromCharCode(char), x, y|String.fromCharCode(char===0x2648?0x03A8:char,0xFE0E), x, y|' index.html
+  # requests a text glyph but is unreliable on Windows, so we also remap every
+  # emoji-default codepoint Brogue emits to a pure-text lookalike: the whole
+  # zodiac block (FOLIAGE_CHAR = Aries U+2648) -> psi U+03A8, and the card suits
+  # (incl. the diamond suit that shows as the paralysis-trigger emoji) -> their
+  # hollow/text forms. Inject a textGlyph() helper and route the draw through it.
+  # To kill a future emoji leak, add a `0xSRC:0xDST,` pair to TEXT_REMAP below.
+  REMAP='var TEXT_REMAP={0x2648:0x03A8,0x2649:0x03A8,0x264A:0x03A8,0x264B:0x03A8,0x264C:0x03A8,0x264D:0x03A8,0x264E:0x03A8,0x264F:0x03A8,0x2650:0x03A8,0x2651:0x03A8,0x2652:0x03A8,0x2653:0x03A8,0x2660:0x2664,0x2663:0x2667,0x2665:0x2661,0x2662:0x25C7,0x2666:0x25C7};function textGlyph(c){if(TEXT_REMAP.hasOwnProperty(c))c=TEXT_REMAP[c];return String.fromCharCode(c,0xFE0E);}'
+  sed -i "s|function onMessage(e){|$REMAP function onMessage(e){|" index.html
+  sed -i 's|String.fromCharCode(char), x, y|textGlyph(char), x, y|' index.html
+  if ! grep -q 'function textGlyph' index.html; then
+    echo "  !! emoji-remap injection failed (upstream draw code changed) -- inspect index.html"
+  fi
   cd ..
   echo "  OK -> brogue/index.html (asm.js Brogue, fully offline). Arrow keys / mouse to play."
 }
