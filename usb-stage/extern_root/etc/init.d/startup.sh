@@ -56,17 +56,23 @@ if [ "$TRIPPY_SKIN" = "1" ] && [ -f "$STOCK" ] && [ -f "$BASE/opt/portal.html" ]
     mount -o bind "$BASE/opt/portal.html" "$STOCK" && echo "stock landing replaced with trippy portal"
 fi
 
-# --- 4. wardriving: cron the ra0 site-survey logger every 5 min ------------
-mkdir -p /tmp/crontabs
-echo "*/5 * * * * $BASE/opt/bin/wardrive.sh >/dev/null 2>&1" > /tmp/crontabs/root
-if pidof crond >/dev/null 2>&1; then
-    echo "crond already running"
+# --- 4. wardriving: scan ra0 every 5 min ------------------------------------
+# NOT via crond: busybox crond chdir()s to each job's $HOME before running it,
+# and root's home (/root, per /etc/passwd) does not exist on this read-only
+# rootfs -- the chdir fails and the job is killed before the command ever runs,
+# so cron silently produces nothing. We self-schedule with a tiny background
+# loop instead (no $HOME/chdir dependency). Invoke via `sh` so a missing execute
+# bit on the read-only ext2 image can't break it either. The loop runs one scan
+# immediately, then every 5 min; errors go to the run log (not /dev/null).
+WD="$BASE/opt/bin/wardrive.sh"
+PIDF="$BASE/run/wardrive.loop.pid"
+if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
+    echo "wardrive loop already running (pid $(cat "$PIDF"))"
 else
-    "$BIN/crond" -c /tmp/crontabs -L "$BASE/run/crond.log"
-    echo "crond started (wardrive.sh every 5 min)"
+    ( while :; do sh "$WD" >>"$BASE/run/wardrive.boot.log" 2>&1; sleep 300; done ) &
+    echo $! > "$PIDF"
+    echo "wardrive loop started: scan now + every 5 min (pid $!)"
 fi
-# kick off one scan now so there's immediate data (backgrounded; ~5s)
-"$BASE/opt/bin/wardrive.sh" >/dev/null 2>&1 &
 
 echo "startup complete. panel: http://<device-ip>:$HTTP_PORT/"
 exit 0

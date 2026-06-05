@@ -4,6 +4,13 @@ echo "[*] stopping control-panel httpd (matches 'httpd -p' in cmdline)..."
 for p in $(ps | grep 'httpd -p' | grep -v grep | awk '{print $1}'); do
     kill "$p" 2>/dev/null && echo "    killed pid $p"
 done
+echo "[*] stopping wardrive scheduler (loop + any in-flight scan, legacy crond)..."
+for pf in /tmp/extern/run/wardrive.loop.pid /extern/run/wardrive.loop.pid; do
+    [ -f "$pf" ] && kill "$(cat "$pf" 2>/dev/null)" 2>/dev/null && rm -f "$pf"
+done
+for p in $(ps | grep -E 'wardrive\.sh|crond' | grep -v grep | awk '{print $1}'); do
+    kill "$p" 2>/dev/null && echo "    killed pid $p"
+done
 echo "[*] removing stock-UI skin bind-mount (if any)..."
 grep -q " /www/app/main.html " /proc/mounts && umount /www/app/main.html
 echo "[*] leaving /tmp/bin + /tmp/extern in place (harmless; gone on reboot)."
