@@ -206,6 +206,12 @@ fetch_brogue(){
     echo "  !! failed to localize jQuery in index.html -- removing so it won't ship online-dependent."
     rm -f index.html; cd ..; return 1
   fi
+  # Hide the upstream demo banner (we launch this from our own portal). Hidden via
+  # CSS rather than deleted, because the launcher's init still references #request-fullscreen.
+  sed -i 's|</head>|<style>#project-info{display:none!important}</style></head>|' index.html
+  # Force text (non-emoji) glyph rendering: some symbol codepoints (e.g. Virgo U+264D)
+  # get swapped for color emoji on canvas. Appending VS15 (U+FE0E) forces a text glyph.
+  sed -i 's|String.fromCharCode(char), x, y|String.fromCharCode(char,0xFE0E), x, y|' index.html
   cd ..
   echo "  OK -> brogue/index.html (asm.js Brogue, fully offline). Arrow keys / mouse to play."
 }
