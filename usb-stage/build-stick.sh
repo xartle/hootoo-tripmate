@@ -38,6 +38,7 @@ sync
 echo
 echo "Done. Eject and plug into the TripMate."
 echo "Bundled games: freecell, sudoku, wordle (work out of the box)."
-echo "Big games (brogue/mindustry/openttd/freeciv) need fetch-games.sh first."
+echo "Chess (vs Stockfish) and Brogue are fetched offline by ./games/fetch-games.sh."
+echo "mindustry/openttd are TODO -- they need a real build, not a fetch (see that script)."
 echo "If this is a fresh device, persist the boot hook once (see TRIPPY-PROGRESS.md),"
 echo "or just run the 3 manual mount commands to start it immediately."

@@ -60,14 +60,15 @@
   // games live on the stick, served by the stock :80 fileserv
   var BASE = "/data/UsbDisk1/Volume1/games/";
   var GAMES = [
-    {slug:"brogue",    ico:"&#128481;", name:"Brogue CE",  desc:"deep roguelike dungeon crawl"},
-    {slug:"mindustry", ico:"&#9881;",   name:"Mindustry",  desc:"tower-defense factory builder"},
-    {slug:"openttd",   ico:"&#128642;", name:"OpenTTD",    desc:"transport tycoon empire"},
-    {slug:"freeciv",   ico:"&#127963;", name:"Freeciv",    desc:"build a civilization"},
-    {slug:"chess",     ico:"&#9822;",   name:"Chess",      desc:"vs Stockfish engine"},
-    {slug:"freecell",  ico:"&#127137;", name:"FreeCell",   desc:"classic solitaire"},
-    {slug:"sudoku",    ico:"&#128290;", name:"Sudoku",     desc:"number logic puzzle"},
-    {slug:"wordle",    ico:"&#128221;", name:"Wordle",     desc:"daily-style word guess"}
+    {slug:"brogue",     ico:"&#128481;", name:"Brogue",      desc:"deep roguelike dungeon crawl"},
+    {slug:"chess",      ico:"&#9822;",   name:"Chess",       desc:"vs Stockfish engine"},
+    {slug:"mahjong",    ico:"&#126976;", name:"Mahjong",     desc:"tile-matching solitaire"},
+    {slug:"solitaire",  ico:"&#127183;", name:"Solitaire",   desc:"Klondike card game"},
+    {slug:"freecell",   ico:"&#127137;", name:"FreeCell",    desc:"classic solitaire"},
+    {slug:"tetris",     ico:"&#129513;", name:"Tetris",      desc:"falling-block puzzle"},
+    {slug:"minesweeper",ico:"&#128163;", name:"Minesweeper", desc:"flag the mines"},
+    {slug:"sudoku",     ico:"&#128290;", name:"Sudoku",      desc:"number logic puzzle"},
+    {slug:"wordle",     ico:"&#128221;", name:"Wordle",      desc:"daily-style word guess"}
   ];
   var g = document.getElementById("games");
   GAMES.forEach(function(game){

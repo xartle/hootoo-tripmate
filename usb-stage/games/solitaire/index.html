@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+<title>Solitaire</title>
+<style>
+  :root{--bg:#0d1117;--fg:#e6edf3;--mut:#8b949e;--accent:#58a6ff;--felt:#13422f}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;
+       display:flex;flex-direction:column;align-items:center;min-height:100vh;user-select:none}
+  header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;padding:12px}
+  header h1{margin:0 8px 0 0;font-size:20px;font-weight:800}
+  button{background:#161b22;color:var(--fg);border:1px solid #30363d;border-radius:8px;padding:7px 11px;font:inherit;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  #msg{min-height:22px;font-weight:800;color:#7ee787}
+  .table{background:var(--felt);border-radius:10px;padding:12px}
+  .row{display:flex;gap:9px}
+  .row.tableau{margin-top:14px;align-items:flex-start}
+  .pile{width:58px;min-height:80px;border-radius:6px;position:relative}
+  .slot{border:2px dashed rgba(255,255,255,.16)}
+  .ph{color:#cfe;opacity:.4;text-align:center;padding-top:26px;font-size:22px;pointer-events:none}
+  .card{width:58px;height:80px;border-radius:6px;background:#fafafa;color:#1a1a1a;position:absolute;left:0;top:0;
+        border:1px solid #888;cursor:pointer;font-weight:800;font-size:15px;
+        display:flex;flex-direction:column;justify-content:space-between;padding:3px 5px;line-height:1}
+  .card.red{color:#c52828}
+  .card.back{background:repeating-linear-gradient(45deg,#1f6feb,#1f6feb 6px,#163d8a 6px,#163d8a 12px);border-color:#0d2b66}
+  .card .bot{align-self:flex-end;transform:rotate(180deg)}
+  .card.sel{outline:3px solid #f0c000;outline-offset:-1px;box-shadow:0 0 8px #f0c000}
+</style>
+</head>
+<body>
+<header>
+  <h1>Solitaire</h1>
+  <button id="new">New</button>
+  <button id="draw">Draw: 1</button>
+  <button id="undo">Undo</button>
+</header>
+<div id="msg"></div>
+<div class="table">
+  <div class="row" id="top"></div>
+  <div class="row tableau" id="tableau"></div>
+</div>
+<script>
+(function(){
+  var SU=['♠','♥','♦','♣']; // spade heart diamond club
+  var RK=['','A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  function red(s){return s===1||s===2;}
+  var stock,waste,found,tab,sel,drawN,hist;
+  function snap(){return JSON.stringify({s:stock,w:waste,f:found,t:tab});}
+  function pushHist(){hist.push(snap());if(hist.length>300)hist.shift();}
+  function newGame(){
+    var deck=[],s,r;
+    for(s=0;s<4;s++)for(r=1;r<=13;r++)deck.push({s:s,r:r,up:false});
+    for(var i=deck.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=deck[i];deck[i]=deck[j];deck[j]=t;}
+    tab=[[],[],[],[],[],[],[]];
+    for(var c=0;c<7;c++)for(var k=0;k<=c;k++){var card=deck.pop();card.up=(k===c);tab[c].push(card);}
+    stock=deck;waste=[];found=[[],[],[],[]];sel=null;hist=[];
+    document.getElementById('msg').textContent='';
+    render();
+  }
+  function canFound(card,f){
+    var p=found[f];
+    if(!p.length)return card.r===1;
+    var t=p[p.length-1];return t.s===card.s&&card.r===t.r+1;
+  }
+  function canTab(card,c){
+    var p=tab[c];
+    if(!p.length)return card.r===13;
+    var t=p[p.length-1];return t.up&&red(t.s)!==red(card.s)&&card.r===t.r-1;
+  }
+  function selCards(){
+    if(!sel)return [];
+    if(sel.from==='waste')return waste.length?[waste[waste.length-1]]:[];
+    if(sel.from==='found')return found[sel.idx].length?[found[sel.idx][found[sel.idx].length-1]]:[];
+    return tab[sel.idx].slice(sel.ci);
+  }
+  function removeSel(){
+    if(sel.from==='waste')waste.pop();
+    else if(sel.from==='found')found[sel.idx].pop();
+    else{tab[sel.idx]=tab[sel.idx].slice(0,sel.ci);var p=tab[sel.idx];if(p.length&&!p[p.length-1].up)p[p.length-1].up=true;}
+  }
+  function moveTo(type,idx){
+    if(sel.from===type&&sel.idx===idx){sel=null;render();return;}
+    var cards=selCards();
+    if(!cards.length){sel=null;render();return;}
+    var first=cards[0],ok=false;
+    if(type==='found'&&cards.length===1&&canFound(first,idx))ok=true;
+    if(type==='tab'&&canTab(first,idx))ok=true;
+    if(!ok){sel=null;render();return;}
+    pushHist();removeSel();
+    if(type==='found')found[idx].push(first);
+    else tab[idx]=tab[idx].concat(cards);
+    sel=null;done();
+  }
+  function autoFound(from,idx,ci){
+    var card;
+    if(from==='waste'){if(!waste.length)return;card=waste[waste.length-1];}
+    else{if(ci!==tab[idx].length-1)return;card=tab[idx][ci];if(!card.up)return;}
+    for(var f=0;f<4;f++)if(canFound(card,f)){
+      pushHist();
+      if(from==='waste')waste.pop();
+      else{tab[idx].pop();var p=tab[idx];if(p.length&&!p[p.length-1].up)p[p.length-1].up=true;}
+      found[f].push(card);sel=null;done();return;
+    }
+  }
+  function done(){
+    render();
+    var w=found[0].length+found[1].length+found[2].length+found[3].length;
+    if(w===52)document.getElementById('msg').textContent='🎉 You win!';
+  }
+  function clickStock(){
+    pushHist();
+    if(!stock.length){while(waste.length){var c=waste.pop();c.up=false;stock.push(c);}}
+    else{var n=Math.min(drawN,stock.length);for(var i=0;i<n;i++){var d=stock.pop();d.up=true;waste.push(d);}}
+    sel=null;render();
+  }
+  function face(card){
+    if(!card.up)return '<div class="card back" data-card></div>';
+    var lbl=RK[card.r]+SU[card.s];
+    return '<div class="card'+(red(card.s)?' red':'')+'" data-card><div class="top">'+lbl+'</div><div class="bot">'+lbl+'</div></div>';
+  }
+  function render(){
+    var top=document.getElementById('top');top.innerHTML='';var html='';
+    // stock
+    html+='<div class="pile slot" data-pile="stock:0">'+(stock.length?'<div class="card back" data-card></div>':'<div class="ph">↻</div>')+'</div>';
+    // waste (show top)
+    html+='<div class="pile" data-pile="waste:0">'+(waste.length?face(waste[waste.length-1]):'')+'</div>';
+    // spacer
+    html+='<div class="pile" style="visibility:hidden"></div>';
+    // foundations
+    for(var f=0;f<4;f++){
+      var fc=found[f].length?face(found[f][found[f].length-1]):'<div class="ph">'+SU[f]+'</div>';
+      html+='<div class="pile slot" data-pile="found:'+f+'">'+fc+'</div>';
+    }
+    top.innerHTML=html;
+    markSel(top);
+    // tableau
+    var tb=document.getElementById('tableau');var th='';
+    for(var c=0;c<7;c++){
+      var pile=tab[c],h=80+Math.max(0,pile.length-1)*22;
+      th+='<div class="pile slot" data-pile="tab:'+c+'" style="min-height:'+h+'px">';
+      if(!pile.length)th+='<div class="ph"></div>';
+      for(var k=0;k<pile.length;k++){
+        var card=pile[k];
+        var cls='card'+(card.up?(red(card.s)?' red':''):' back');
+        var lbl=card.up?(RK[card.r]+SU[card.s]):'';
+        var inner=card.up?('<div class="top">'+lbl+'</div><div class="bot">'+lbl+'</div>'):'';
+        th+='<div class="'+cls+'" data-card data-ci="'+k+'" style="top:'+(k*22)+'px">'+inner+'</div>';
+      }
+      th+='</div>';
+    }
+    tb.innerHTML=th;
+    markSel(tb);
+  }
+  function markSel(root){
+    if(!sel)return;
+    var pileEl=root.querySelector('[data-pile="'+sel.from+':'+sel.idx+'"]');
+    if(!pileEl)return;
+    var cards=pileEl.querySelectorAll('.card');
+    if(sel.from==='tab'){for(var i=sel.ci;i<cards.length;i++)cards[i].classList.add('sel');}
+    else if(cards.length)cards[cards.length-1].classList.add('sel');
+  }
+  function handle(e){
+    var pe=e.target.closest('[data-pile]');if(!pe)return;
+    var parts=pe.dataset.pile.split(':'),ptype=parts[0],pidx=+parts[1];
+    if(ptype==='stock'){clickStock();return;}
+    if(sel){
+      if(ptype==='found'||ptype==='tab')moveTo(ptype,pidx);
+      else{sel=null;render();}
+      return;
+    }
+    if(ptype==='waste'&&waste.length){sel={from:'waste',idx:0,ci:0};render();}
+    else if(ptype==='found'&&found[pidx].length){sel={from:'found',idx:pidx,ci:0};render();}
+    else if(ptype==='tab'){
+      var cd=e.target.closest('.card');if(!cd||cd.dataset.ci===undefined)return;
+      var ci=+cd.dataset.ci;if(tab[pidx][ci]&&tab[pidx][ci].up){sel={from:'tab',idx:pidx,ci:ci};render();}
+    }
+  }
+  function dbl(e){
+    var pe=e.target.closest('[data-pile]');if(!pe)return;
+    var parts=pe.dataset.pile.split(':'),ptype=parts[0],pidx=+parts[1];
+    var cd=e.target.closest('.card');
+    if(ptype==='waste')autoFound('waste',0,0);
+    else if(ptype==='tab'&&cd&&cd.dataset.ci!==undefined)autoFound('tab',pidx,+cd.dataset.ci);
+  }
+  document.querySelector('.table').addEventListener('click',handle);
+  document.querySelector('.table').addEventListener('dblclick',dbl);
+  document.getElementById('new').onclick=newGame;
+  document.getElementById('undo').onclick=function(){if(hist.length){var s=JSON.parse(hist.pop());stock=s.s;waste=s.w;found=s.f;tab=s.t;sel=null;document.getElementById('msg').textContent='';render();}};
+  document.getElementById('draw').onclick=function(){drawN=drawN===1?3:1;this.textContent='Draw: '+drawN;newGame();};
+  drawN=1;newGame();
+})();
+</script>
+</body>
+</html>

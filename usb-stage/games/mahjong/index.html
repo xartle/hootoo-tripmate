@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+<title>Mahjong Solitaire</title>
+<style>
+  :root{--bg:#0d1117;--fg:#e6edf3;--mut:#8b949e;--accent:#58a6ff;--felt:#13422f}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;
+       display:flex;flex-direction:column;align-items:center;min-height:100vh;user-select:none}
+  header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;padding:12px}
+  header h1{margin:0 8px 0 0;font-size:20px;font-weight:800}
+  button{background:#161b22;color:var(--fg);border:1px solid #30363d;border-radius:8px;padding:7px 11px;font:inherit;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  .stat{font-weight:700;font-variant-numeric:tabular-nums}
+  #msg{min-height:22px;font-weight:800;color:#7ee787}
+  #wrap{max-width:100vw;overflow:auto;padding:6px}
+  #board{position:relative;transform-origin:top left;background:var(--felt);border-radius:10px}
+  .tile{position:absolute;width:36px;height:48px;border-radius:5px;background:#f4ecd8;border:1px solid #b9ad8a;
+        border-bottom:3px solid #9c8f6b;border-right:2px solid #a89b78;display:flex;align-items:center;justify-content:center;
+        font-size:28px;line-height:1;color:#1a1a1a;cursor:pointer;overflow:hidden}
+  .tile.free{cursor:pointer}
+  .tile.blocked{cursor:default;filter:brightness(.82)}
+  .tile.sel{background:#fff3b0;border-color:#f0c000;box-shadow:0 0 6px #f0c000}
+  .tile.hint{animation:hint .5s ease-in-out 3}
+  @keyframes hint{50%{background:#9be39b}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mahjong</h1>
+  <button id="new">New</button>
+  <button id="hint">Hint</button>
+  <button id="shuffle">Shuffle</button>
+  <span class="stat">Tiles: <span id="left">144</span></span>
+</header>
+<div id="msg"></div>
+<div id="wrap"><div id="board"></div></div>
+<script>
+(function(){
+  var MAXZ=3, COL=34, ROW=44, OFF=6, PAD=22, TW=36, TH=48;
+  var LAYERS=[{w:12,h:8},{w:8,h:4},{w:4,h:3},{w:2,h:2}]; // 96+32+12+4 = 144
+  var board=document.getElementById('board'), wrap=document.getElementById('wrap');
+  var FLOWERS=Array.from('🀢🀣🀤🀥'), SEASONS=Array.from('🀦🀧🀨🀩');
+  var STD=Array.from('🀇🀈🀉🀊🀋🀌🀍🀎🀏')      // characters 1-9
+    .concat(Array.from('🀐🀑🀒🀓🀔🀕🀖🀗🀘'))   // bamboo 1-9
+    .concat(Array.from('🀙🀚🀛🀜🀝🀞🀟🀠🀡'))   // circles 1-9
+    .concat(Array.from('🀀🀁🀂🀃'))             // winds
+    .concat(Array.from('🀄🀅🀆'));              // dragons  (34 types)
+  function facePairs(){
+    var p=[];STD.forEach(function(f){p.push([f,f]);p.push([f,f]);});      // 68 pairs
+    p.push([FLOWERS[0],FLOWERS[1]],[FLOWERS[2],FLOWERS[3]]);              // +2
+    p.push([SEASONS[0],SEASONS[1]],[SEASONS[2],SEASONS[3]]);             // +2  => 72
+    return p;
+  }
+  function positions(){
+    var ps=[];
+    LAYERS.forEach(function(L,z){
+      var ox=Math.floor((12-L.w)/2), oy=Math.floor((8-L.h)/2);
+      for(var y=0;y<L.h;y++)for(var x=0;x<L.w;x++)ps.push({x:ox+x,y:oy+y,z:z});
+    });
+    return ps; // 144
+  }
+  function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+  // reverse-deal: produce a removal order of 72 pairs that empties the layout,
+  // so assigning matching faces to each removed pair guarantees a solvable board.
+  function solvableOrder(){
+    var rem=positions();
+    function occ(x,y,z){for(var i=0;i<rem.length;i++){var t=rem[i];if(t.x===x&&t.y===y&&t.z===z)return true;}return false;}
+    function free(t){for(var zz=t.z+1;zz<=MAXZ;zz++)if(occ(t.x,t.y,zz))return false;return !occ(t.x-1,t.y,t.z)||!occ(t.x+1,t.y,t.z);}
+    var order=[];
+    while(rem.length){
+      var fl=rem.filter(free);
+      if(fl.length<2)return null;
+      var a=fl[Math.floor(Math.random()*fl.length)],b;
+      do{b=fl[Math.floor(Math.random()*fl.length)];}while(b===a);
+      order.push([a,b]);
+      rem=rem.filter(function(t){return t!==a&&t!==b;});
+    }
+    return order;
+  }
+  var tiles, sel;
+  function grpOf(face){return FLOWERS.indexOf(face)>=0?'f':(SEASONS.indexOf(face)>=0?'s':'n');}
+  function match(a,b){return a!==b&&(a.face===b.face||(a.grp==='f'&&b.grp==='f')||(a.grp==='s'&&b.grp==='s'));}
+  function tileAt(x,y,z){for(var i=0;i<tiles.length;i++){var t=tiles[i];if(!t.removed&&t.x===x&&t.y===y&&t.z===z)return t;}return null;}
+  function isFree(t){if(t.removed)return false;for(var zz=t.z+1;zz<=MAXZ;zz++)if(tileAt(t.x,t.y,zz))return false;return !tileAt(t.x-1,t.y,t.z)||!tileAt(t.x+1,t.y,t.z);}
+  function newGame(){
+    var order=null,guard=0;while(!order&&guard++<500)order=solvableOrder();
+    var fp=shuffle(facePairs());
+    tiles=[];
+    order.forEach(function(pair,i){
+      pair[0].face=fp[i][0];pair[1].face=fp[i][1];
+      [pair[0],pair[1]].forEach(function(p){p.removed=false;p.grp=grpOf(p.face);tiles.push(p);});
+    });
+    tiles.forEach(function(t,i){t.id=i;});
+    sel=null;render();fit();
+  }
+  function render(){
+    board.style.width=(12*COL+TW-COL+PAD*2)+'px';
+    board.style.height=(8*ROW+TH-ROW+PAD*2)+'px';
+    board.innerHTML='';
+    // draw bottom-up, back-to-front
+    var sorted=tiles.slice().sort(function(a,b){return (a.z-b.z)||(a.y-b.y)||(a.x-b.x);});
+    sorted.forEach(function(t){
+      if(t.removed)return;
+      var d=document.createElement('div');
+      var free=isFree(t);
+      d.className='tile '+(free?'free':'blocked')+(sel===t?' sel':'');
+      d.textContent=t.face;
+      d.style.left=(PAD+t.x*COL-t.z*OFF)+'px';
+      d.style.top=(PAD+t.y*ROW-t.z*OFF)+'px';
+      d.style.zIndex=t.z*1000+t.y*20+t.x;
+      d.dataset.id=t.id;
+      board.appendChild(d);
+    });
+    document.getElementById('left').textContent=tiles.filter(function(t){return !t.removed;}).length;
+  }
+  function fit(){
+    var bw=board.offsetWidth||472, avail=Math.min(window.innerWidth-16, 760);
+    var s=Math.min(1, avail/bw);
+    board.style.transform='scale('+s+')';
+    wrap.style.height=(board.offsetHeight*s+12)+'px';
+  }
+  function freeMatch(){
+    var fr=tiles.filter(function(t){return !t.removed&&isFree(t);});
+    for(var i=0;i<fr.length;i++)for(var j=i+1;j<fr.length;j++)if(match(fr[i],fr[j]))return [fr[i],fr[j]];
+    return null;
+  }
+  function checkEnd(){
+    var rem=tiles.filter(function(t){return !t.removed;}).length;
+    if(rem===0){document.getElementById('msg').textContent='🎉 Solved! Every tile cleared.';return;}
+    if(!freeMatch())document.getElementById('msg').textContent='No moves left — Shuffle or New game.';
+    else document.getElementById('msg').textContent='';
+  }
+  function pick(t){
+    if(!isFree(t))return;
+    if(sel===t){sel=null;render();return;}
+    if(sel&&match(sel,t)){sel.removed=true;t.removed=true;sel=null;render();checkEnd();return;}
+    sel=t;render();
+  }
+  board.addEventListener('click',function(e){
+    var d=e.target.closest('.tile');if(!d)return;
+    var t=tiles[+d.dataset.id];if(t&&!t.removed)pick(t);
+  });
+  document.getElementById('new').onclick=newGame;
+  document.getElementById('shuffle').onclick=function(){
+    var rem=tiles.filter(function(t){return !t.removed;});
+    var faces=shuffle(rem.map(function(t){return t.face;}));
+    rem.forEach(function(t,i){t.face=faces[i];t.grp=grpOf(t.face);});
+    sel=null;render();checkEnd();
+  };
+  document.getElementById('hint').onclick=function(){
+    var m=freeMatch();if(!m)return;
+    var els=board.querySelectorAll('.tile');
+    [].forEach.call(els,function(d){var t=tiles[+d.dataset.id];if(t===m[0]||t===m[1])d.classList.add('hint');});
+  };
+  window.addEventListener('resize',fit);
+  newGame();
+})();
+</script>
+</body>
+</html>
